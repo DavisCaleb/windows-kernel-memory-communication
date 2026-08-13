@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="KernelDriver/MemoryCommunicationDriver.vcxproj" />
+  <Project Path="ClientLibrary/MemoryCommunicationClient.vcxproj" />
+</Solution>
