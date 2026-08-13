@@ -4,8 +4,10 @@
 #include <stdint.h>
 
 // The protocol is intentionally kept in one header so the user-mode client and
-// kernel component cannot silently drift apart. This remains a prototype ABI:
-// volatile fields do not provide production-grade inter-process synchronization.
+// kernel component cannot silently drift apart. It models multiple indexed
+// request streams for cross-process read/write and query operations. This remains
+// a prototype ABI: volatile fields do not provide production-grade inter-process
+// synchronization or make the client API safe for arbitrary concurrent callers.
 enum class CommunicationCommand : int
 {
     Idle = 0,
@@ -22,6 +24,7 @@ enum class CommunicationCommand : int
     ReadValidated
 };
 
+// Maximum number of independently indexed transport/request streams.
 inline constexpr size_t kMaximumWorkerCount = 10;
 inline constexpr size_t kModuleNameCapacity = 30;
 

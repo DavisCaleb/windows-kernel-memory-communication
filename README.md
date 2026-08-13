@@ -2,9 +2,11 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)
+![Memory operations](https://img.shields.io/badge/memory-read%20%2F%20write-6A5ACD)
+![Worker streams](https://img.shields.io/badge/worker%20streams-up%20to%2010-2E8B57)
 ![Status](https://img.shields.io/badge/status-archival%20prototype-orange)
 
-An archival C++ prototype exploring communication between a Windows x64 kernel component and a user-mode client. The code demonstrates cross-process copy operations, module discovery, heartbeat handling, process-object ownership, and a shared request ABI.
+An archival C++ prototype designed for **cross-process memory reading and writing** through a Windows x64 kernel component and user-mode client. Its protocol supports a **multi-worker architecture with multiple independent request streams**, alongside module discovery, heartbeat handling, process-object ownership, and a shared request ABI.
 
 > **Status:** Educational source archive—not production software. The transport relies on undocumented Windows internals. No binaries, installer, or releases are provided.
 
@@ -14,18 +16,31 @@ An archival C++ prototype exploring communication between a Windows x64 kernel c
 
 The repository is organized into three focused components:
 
-- **`KernelDriver/`** — WDM/WDK kernel project that processes requests and manages referenced process objects.
-- **`ClientLibrary/`** — C++17 static library implementing the user-mode side of the prototype protocol.
-- **`Shared/CommunicationProtocol.h`** — single ABI definition shared by both projects.
+- **`KernelDriver/`** — WDM/WDK kernel project that services read, validated-read, write, and process/module query requests while managing referenced process objects.
+- **`ClientLibrary/`** — C++17 static library exposing raw-buffer and typed `Read<T>`/`Write<T>` helpers over indexed communication streams.
+- **`Shared/CommunicationProtocol.h`** — single ABI definition shared by both projects, including bounded worker and stream metadata.
+
+### Core design goals
+
+- **Bidirectional memory transfer:** copy bytes from a selected target process into the client process, or from the client into the selected target.
+- **Typed client operations:** read and write trivially copyable C++ values without duplicating buffer setup code.
+- **Multiple communication streams:** allocate up to ten request slots, each with its own worker index, kernel-side request processor, command state, and request data.
+- **Multithreaded transport:** start one detached transport worker for each active request stream so the kernel side can maintain multiple independently processed channels.
+
+> **Concurrency scope:** The prototype implements multiple worker streams, but the archival client wrapper intentionally requires public calls to originate from the thread that called `StartCommunication`. Operations also wait synchronously for their selected stream to return to idle. It therefore demonstrates a multi-worker protocol architecture—not a production-ready, concurrently callable client API.
 
 The project is presented as an early systems-programming experiment and design case study, not as a secure or deployable driver.
 
 ## Technical Highlights
 
+- Implemented cross-process reads and writes with `MmCopyVirtualMemory`, including a separate validated-read command.
+- Added raw-buffer operations plus constrained `Read<T>`, `ReadValidated<T>`, and `Write<T>` helpers for trivially copyable values.
+- Modeled up to **10 indexed communication streams** with dedicated request structures and kernel-side processors.
+- Started one transport worker per configured stream and validated worker counts and indices at the protocol boundary.
 - Separated kernel, user-mode, and shared-protocol responsibilities into clear projects.
 - Used WDK primitives including `PEPROCESS`, `KAPC_STATE`, MDLs, `NTSTATUS`, and structured exception handling.
 - Centralized the x64 request ABI to prevent duplicate protocol definitions from drifting.
-- Added bounded worker indices, request timeouts, input checks, process-reference cleanup, and explicit failure handling.
+- Added request timeouts, input checks, process-reference cleanup, heartbeat monitoring, and explicit failure handling.
 - Documented trust boundaries and a migration path toward a supported IOCTL/KMDF architecture.
 
 ## Repository Layout
@@ -68,6 +83,8 @@ No loading, signing, deployment, bypass, or runtime-use instructions are include
 
 ## Important Limitations
 
+- Memory operations are privileged and must only target processes the operator owns or is explicitly authorized to inspect or modify.
+- Multiple kernel-side worker streams exist, but the current client object is owner-thread constrained and waits synchronously for each selected stream.
 - The transport modifies an undocumented kernel entry point and is incompatible with production-driver expectations.
 - Shared polling fields use `volatile`; this is not a formally synchronized request mechanism.
 - Request data crosses a user/kernel trust boundary without production-grade authentication, authorization, or probing.
